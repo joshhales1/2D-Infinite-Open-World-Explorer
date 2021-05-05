@@ -1,0 +1,25 @@
+{
+  "name": "2-d-mmo-rpg",
+  "version": "0.0.0",
+  "description": "2D MMO RPG",
+  "main": "app.js",
+  "author": {
+    "name": ""
+  },
+  "scripts": {
+    "build": "tsc --build",
+    "clean": "tsc --build --clean"
+  },
+  "devDependencies": {
+    "@types/jest": "^26.0.23",
+    "@types/node": "^8.0.14",
+    "@types/ws": "^7.4.1",
+    "jest": "^26.6.3",
+    "ts-jest": "^26.5.5",
+    "typescript": "^3.2.2"
+  },
+  "dependencies": {
+    "simplex-noise": "^2.4.0",
+    "ws": "^7.4.4"
+  }
+}

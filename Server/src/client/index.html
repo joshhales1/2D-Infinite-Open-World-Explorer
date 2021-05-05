@@ -1,0 +1,240 @@
+<html>
+
+<head>
+
+    
+
+
+</head>
+
+<body>
+
+    <canvas id="c" width="256" height="256">
+
+
+    </canvas>
+    
+</body>
+<script defer>
+    let pressing = {};
+    const floorColors = {
+        1: "yellow",
+        2: "green",
+        3: "white",
+        5: "pink"
+    }
+
+    const SIZE = 16;
+
+    var ME;
+
+    const socket = new WebSocket("ws://192.168.1.188:8080");
+
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+
+    socket.onclose = function (event) {
+        if (event.wasClean) {
+            console.log(`[close] Connection closed cleanly, code=${event.code} reason=${event.reason}`);
+        } else {
+            console.log('[close] Connection died');
+        }
+    };
+
+    let chunks = [];
+    let entities = {};
+
+    socket.onerror = function (error) {
+        console.log(`[error] ${error.message}`);
+    }
+
+    socket.onopen = () => {
+
+        s('user_token', Math.random());
+
+        document.body.onkeydown = function (e) {
+
+            if (!pressing[e.key]) {
+                pressing[e.key] = true;
+
+                inputChange(e.key);
+            }
+
+
+        };
+    }
+
+    socket.onmessage = function (event) {
+
+        let message = r(event.data);
+
+        if (message.head === "you") {          
+
+            ME = message.body.ueid;
+
+            console.log(ME);
+        }
+
+        if (message.head === "ping") {
+            s('ping', message.body)
+        }
+
+        else if (message.head === "load_chunk") {
+            chunks.push(message.body);
+        }
+
+        else if (message.head === "entity") {
+
+            entities[message.body.ueid] = message.body;
+        }
+
+        else if (message.head === "unload_chunk") {
+            let ck = message.body.key;
+
+            chunks = chunks.filter(chunk => chunk.key != ck);
+        }
+    };
+
+    function s(head, body) {
+        socket.send(
+            JSON.stringify({ head: head, body: body})
+        );
+
+    }
+
+    function r(raw) {
+        let obj = JSON.parse(raw);
+
+        return { head: obj.head, body: obj.body };
+    }
+
+    function loop() {
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+        if (ME === undefined) {
+            console.log();
+
+
+            window.requestAnimationFrame(loop);
+            return;
+        }
+
+        let meX = entities[ME].x;
+        let meY = entities[ME].y;
+
+        chunks.forEach(chunk => {
+
+
+            let x = 0;
+            chunk.tiles.forEach(row => {
+                let y = 0;
+                row.forEach(tile => {
+                    ctx.fillStyle = floorColors[tile.floor];
+
+                    let baseX = (chunk.x * 16 + x) - meX;
+                    let baseY = (chunk.y * 16 + y) - meY;
+
+                    ctx.fillRect(SIZE * (8 + baseX), SIZE * (8 + baseY), SIZE, SIZE);
+
+                    if (tile.block === 1) {
+                        ctx.fillStyle = "brown";
+                        ctx.fillRect(SIZE * (8 + baseX) + 4, SIZE * (8 + baseY) + 4, SIZE - 8, SIZE - 8);
+                    }
+
+                    if (tile.block === 5) {
+                        ctx.fillStyle = "pink";
+                        ctx.fillRect(SIZE * (8 + baseX), SIZE * (8 + baseY), SIZE, SIZE);
+                    }
+
+                    y++;
+                });
+                x++;
+            });
+
+
+
+        });
+
+
+        Object.keys(entities).forEach(_key => {
+
+            let entity = entities[_key];
+
+            ctx.fillStyle = "red";
+            ctx.fillRect(((entity.x - meX) * SIZE) + SIZE * 8, ((entity.y - meY) * SIZE) + SIZE * 8, SIZE, SIZE);
+
+            ctx.fillStyle = "grey";
+            ctx.globalAlpha = 0.5;
+            ctx.fillRect(((entity.x + entity.facingX - meX) * SIZE) + SIZE * 8, ((entity.y + entity.facingY - meY) * SIZE) + SIZE * 8, SIZE, SIZE);
+
+            ctx.globalAlpha = 1;
+        });
+
+        window.requestAnimationFrame(loop);
+    }
+
+
+    const movementMap = {
+        "w": 3,
+        "d": 2,
+        "s": 1,
+        "a": 4,
+
+        "ArrowUp": 7,
+        "ArrowRight": 6,
+        "ArrowDown": 5,
+        "ArrowLeft": 8
+    }
+
+    function inputChange(keyChanged) {
+
+        if (Object.keys(movementMap).indexOf(keyChanged) != -1) {
+
+
+
+            if (pressing[keyChanged]) {
+                s("mv", movementMap[keyChanged]);
+                return;
+            }
+
+            s("mv", 0);
+            return;
+        }
+
+        switch (keyChanged) {
+
+            case "q":
+
+                s("place", pressing[keyChanged].toString());
+
+                break;
+
+            case "e":
+
+                s("break", pressing[keyChanged].toString());
+
+                break;
+
+            case "e":
+                s("destroy", pressing[keyChanged].toString());
+                break;
+
+            case "r":
+                s("atk", pressing[keyChanged].toString());
+                break;
+        }
+    }
+
+    document.body.onkeyup = function (e) {
+        pressing[e.key] = false;
+
+        inputChange(e.key);
+    }
+
+
+    window.requestAnimationFrame(loop);
+
+</script>
+</html>

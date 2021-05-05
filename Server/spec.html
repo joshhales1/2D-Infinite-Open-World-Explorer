@@ -1,0 +1,131 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>MMO Open World RPG API Specification</title>
+</head>
+<body>
+
+    <h1 id="mmo-open-world-rpg-api-specification">MMO Open World RPG API Specification</h1>
+<h2 id="communication">Communication</h2>
+<p>Uses <code>rfc-6455</code>. Implemented with <a href="https://github.com/websockets/ws">ws</a> for NodeJS.</p>
+<h3 id="communication-format">Communication format</h3>
+<p>Uses a head and body format:</p>
+<p><code>head&amp;key1:value1^key2:value2^</code></p>
+<pre><code>head &amp; 
+ key1 : value ^ 
+ key2 : value ^
+ key3 : value ^
+</code></pre>
+<p>This document will use the notation <code>send(head: head, key1: value, key2: value)</code> to represent sending a message in the above specified format.</p>
+<p>For displaying incoming data the format <code>head: head value, key1: [description of value (type)]</code>. The type is a string unless otherwise stated and is only a guide of what the client should expect.
+The client will need to parse them to the correct data types.</p>
+<p>Example implementation of the function can be found below.</p>
+<h3 id="initializing-connection-to-game">Initializing connection to game</h3>
+<ol>
+<li><code>send(head: user_token, token: [some token])</code>. <code>some token</code> currently should be a random number but will be used to hold player data over server restarts later. It will also be given using another server.</li>
+<li>The server will return <code>head: server, data: successful connection</code> if successful. Server will return <code>head: server, data: bad second auth</code> if the connection has already been authorized.</li>
+<li>The server will also return every chunk and entity currently in usage. These are all in seperate messages. Use <a href="#chunk-format">Chunk format</a> and <a href="#entity-format">Entity format</a> for decoding these.</li>
+<li>The server will also return <code>head: you, ueid: [ueid]</code>. This <code>ueid</code> is the entity ID the player owned by the socket. The camera should therefore center around this entity.</li>
+</ol>
+<h3 id="chunk-format">Chunk format</h3>
+<p>Chunks will either be sent to be loaded or requested to be unloaded to the client.</p>
+<h4 id="loading-chunks">Loading chunks</h4>
+<p>Loading chunk messages come in the format <code>head: load_chunk, key: [chunk key], data: [chunk data], x: [x position], y: [y position]</code>.</p>
+<p>The chunk key should be used by the client to store chunks in a dictionary like structure so they can be updated.
+For a chunk to be updated it is just reloaded. So the chunk will be sent to be loaded again with the changes.
+The chunk key is made by concatenating the x and y position of the chunk.</p>
+<h5 id="chunk-data">Chunk data</h5>
+<p>The <code>data</code> in a <code>load_chunk</code> is in the format:</p>
+<pre><code>b = A block. 
+f = A floor.
+
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+bfbfbfbfbfbfbfbfbfbfbfbfbfbfbfbf/
+</code></pre>
+<p>It is made of 16 rows of 32 characters. Each row can be split every two characters.
+The first of these split characters is the block located at that tile.
+The second is the type of floor located at that tile.</p>
+<h4 id="unloading-chunks">Unloading chunks</h4>
+<p>Unloading chunk messages come in the format <code>head: unload_chunk, key [chunk_key]</code>.</p>
+<p>The chunk key is the same key used when the chunk was loaded. Use this message to delete any loaded chunks from the clients memory.
+No block updates take place in unloaded chunks.</p>
+<h3 id="entity-format">Entity format</h3>
+<p>Entity messages come in the format:</p>
+<pre><code>head: entity, 
+ x: [x position (number)],
+ y: [y position (number)],
+ ueid: [entity uid],
+ facingX: [facing x (number)],
+ facingY: [facing y (number)],
+ dead: [dead (boolean)],
+ type: [type of entity]
+</code></pre>
+<ul>
+<li><code>x position</code> is x the world position of the entity.</li>
+<li><code>y position</code> is y the world position of the entity.</li>
+<li><code>ueid</code> is the unique string which the entity has. Use this to keep entities stored in a dictionary like structure.</li>
+<li><code>facing x</code> will be either -1, 0 or 1. -1 means looking left, 1 means right and 0 means indeterminate. This value should be &quot;signed&quot; (<code>Math.sign(input)</code> by the client).</li>
+<li><code>facing y</code> will be either -1, 0 or 1. -1 means looking down, 1 means up and 0 means indeterminate. This value should be &quot;signed&quot; (<code>Math.sign(input)</code> by the client).</li>
+<li><code>dead</code> is whether the entity is dead. This will only be ever sent once. If a entity has this field set to <code>true</code> then destroy or remove it as necessary.</li>
+<li><code>type</code> is the type of entity, e.g. <code>player</code>, <code>villager</code>. The client should use this to texture the entity correctly.
+All entities sent to the client should be rendered. Any invisible entities are not sent.</li>
+</ul>
+<h4 id="additional-fields">Additional fields</h4>
+<p>Entities may have additional fields depending on their <code>type</code>. These are described below.</p>
+<h5 id="player-player">Player <code>player</code></h5>
+<pre><code>head: entity
+ ... entity fields,
+ placing: [player placing blocks (boolean)],
+ breaking: [player using tool to break (boolean)],
+ attacking: [player using tool to attack (boolean)],
+ name: [name]
+</code></pre>
+<ul>
+<li><code>placing</code> is whether or not the player is currently holding the place button. Should be used to display the correct animation.</li>
+<li><code>breaking</code> is whether or not the player is currently holding the break button. Should be used to display the correct animation.</li>
+<li><code>attacking</code> is whether or not the player is currently holding the attack button. Should be used to display the correct animation.</li>
+<li><code>name</code> is the name of the player. Could be used to display name above player.</li>
+</ul>
+<h5 id="placeholder-placeholder">Placeholder <code>placeholder</code></h5>
+<p>No additional fields.</p>
+<h3 id="player-control">Player control</h3>
+<p>At the time of writing there are 4 distinct things a player can do.</p>
+<h4 id="moving">Moving</h4>
+<p>To set the movement direction of the player use <code>send(head: mv, data: [direction])</code>.
+The movement direction is used to determine facing direction. This will be updated to allow clients to decide their facing direction for increased fidelity when building.</p>
+<p><code>direction</code> is the direction of travel where:</p>
+<ul>
+<li><code>0</code> is stationary</li>
+<li><code>1</code> is up</li>
+<li><code>2</code> is right</li>
+<li><code>3</code> is down</li>
+<li><code>4</code> is left</li>
+</ul>
+<h4 id="placing">Placing</h4>
+<p>To place blocks in the facing direction use <code>send(head: place, isPlacing[start or stop(boolean)])</code>.</p>
+<p><code>start or stop</code> should be <code>true</code> to place blocks on each frame but <code>false</code> to stop placing blocks on each frame.</p>
+<h4 id="breaking">Breaking</h4>
+<p>To break blocks in the facing direction use <code>send(head: break, isBreaking[start or stop(boolean)])</code>.</p>
+<p><code>start or stop</code> should be <code>true</code> to break blocks on each frame but <code>false</code> to stop breaking blocks on each frame.</p>
+<h4 id="attacking">Attacking</h4>
+<p>To attacking entites in the facing direction use <code>send(head: attack, isAttacking[start or stop(boolean)])</code>.</p>
+<p><code>start or stop</code> should be <code>true</code> to attack on each frame but <code>false</code> to stop attacking on each frame.</p>
+
+
+</body>
+</html>
